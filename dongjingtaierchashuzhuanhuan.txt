@@ -1,0 +1,129 @@
+#include<stdio.h>
+#include<stdlib.h>
+#define OK 1;
+#define ERROR -1;
+#define MAX_TREE_SIZE 20
+
+typedef struct BiTNode{
+	char data;
+	struct BiTNode *lchild, *rchild;
+}BiTNode, *BiTree;
+typedef char TElemType;
+
+typedef struct{     //孩子链表头指针
+	TElemType data;
+	int lchild, rchild; //孩子链表头指针
+}CSNode;
+
+typedef struct{
+	CSNode nodes[MAX_TREE_SIZE];
+	int n;               //节点数
+}CSTree;
+
+void CreateBiTree(BiTree *T)                 //按先序序列创建二叉树
+{
+	char ch;
+	scanf("%c", &ch);
+	if (ch == ' ')
+		(*T) = NULL;
+	else
+	{
+		(*T) = (BiTNode*)malloc(sizeof(BiTNode));
+		if (!T)
+			exit(-1);
+		(*T)->data = ch;
+		CreateBiTree(&(*T)->lchild);
+		CreateBiTree(&(*T)->rchild);
+	}
+}
+
+void CreatCSTree(CSTree *T)
+{
+	(*T).n = 0;
+	int i ;
+	for (i = 0; i < MAX_TREE_SIZE; i++)
+	{
+		(*T).nodes[i].data = (*T).nodes[i].lchild = (*T).nodes[i].rchild = 0;
+	}
+}
+int PreOrderTraverse(BiTree T, int(*Visit)(TElemType e))  //先序遍历二叉树
+{
+	if (T)
+	{
+		if (Visit(T->data))
+		  if (PreOrderTraverse(T->lchild, Visit))
+		    if (PreOrderTraverse(T->rchild, Visit))
+			         return OK;
+		return ERROR;
+	}
+	else
+		return OK;
+}
+
+int PrintBiTree(TElemType e)   //输出节点值为e的值
+{
+	printf("%c", e);
+	return 1;
+}
+
+void DestoryBiTree(BiTree T)
+{
+	BiTNode *r;
+	while (T->lchild)
+		T = T->lchild;
+	if (T->rchild)
+		T = T->rchild;
+	else
+		free(T);
+}
+
+void BiTree_to_CSTree(BiTree T, CSTree *t)
+{
+	static int i = 0;
+	int k;
+	(*t).nodes[i].data = T->data;
+	(*t).n++;
+	k = i;
+	if (T->lchild)
+	{
+		i++;
+		(*t).nodes[k].lchild = i;
+		BiTree_to_CSTree(T->lchild, t);
+	}
+
+	else
+		(*t).nodes[k].lchild = 0;
+
+	if (T->rchild)
+	{
+		i++;
+		(*t).nodes[k].rchild = i;
+		BiTree_to_CSTree(T->rchild, t);
+	}
+
+	else
+		(*t).nodes[k].rchild = 0;
+}
+
+void printCSTree(CSTree T)
+{
+	int i;
+	printf("data\tlchild\trchild\n");
+	for (i = 0; i <T.n; i++)
+		printf(" %c\t %d\t %d\n", T.nodes[i].data, T.nodes[i].lchild, T.nodes[i].rchild);
+}
+void main()
+{
+	BiTree T;
+	CSTree t;
+	CreatCSTree(&t);
+	printf("创建动态二叉树，按先序序列输入，空格键表示空：\n");
+	CreateBiTree(&T);
+	printf("先序输出二叉树：\n");
+	PreOrderTraverse(T, PrintBiTree);
+	printf("\n用二叉树创建静态二叉链表：\n");
+	BiTree_to_CSTree(T, &t);
+	printCSTree(t);
+	DestoryBiTree(T);
+	printf("动态二叉树销毁完毕！\n");
+}
