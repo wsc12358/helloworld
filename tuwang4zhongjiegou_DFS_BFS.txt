@@ -1,0 +1,979 @@
+#include<stdio.h>
+#include<string.h>
+#include<stdlib.h>
+#define INFINITY 20000
+#define MAX_VERTEX_NUM 20
+#define MAXQSIZE 100  
+#define ture 1
+#define false 0
+#define ERROR -1
+#define OK 1
+typedef enum{ DG, DN, UDG, UDN }GraphKind;   //{有向图，有向网，无向图，无向网}
+typedef int VRType;
+typedef char InfoType;
+typedef char VertexType;
+typedef int QElemType;  
+typedef int Boolean;
+typedef struct ArcCell{  //数组存储的弧
+	VRType adj;   //顶点关系类型
+	InfoType *info;  //该弧相关信息的指针
+}ArcCell, AdjMatrix[MAX_VERTEX_NUM][MAX_VERTEX_NUM];
+
+typedef struct{       //数组存储的图
+	VertexType vexs[MAX_VERTEX_NUM][20];   //顶点向量
+	AdjMatrix arcs;                   //邻接矩阵
+	int vexnum, arcnum;             //图的当前顶点数和弧数
+	GraphKind kind;                 //图的种类标志
+}MGraph;
+
+typedef struct ArcNode{     //邻接表存储的弧
+	VRType adj;   //顶点关系类型
+	int adjvex;   //该弧所指向的顶点的位置
+	struct ArcNode *nextarc;   //指向下一条弧的指针
+	InfoType *info;   //该弧相关信息的指针
+}ArcNode;
+
+typedef struct VNode{      //邻接表存储的顶点
+	VertexType data[20];    //顶点向量
+	ArcNode *firstarc;  //指向第一条依附该顶点的弧的指针
+}VNode, AdjList[MAX_VERTEX_NUM];
+
+typedef struct{          //邻接表存储的图
+	AdjList vertices;     //数组存储的图
+	int vexnum, arcnum;   //图的当前顶点数和弧数
+	GraphKind kind;
+}ALGraph;
+
+typedef struct{
+	QElemType *base;  
+	int front;
+	int real;
+}SqQueue;
+
+Boolean visited[MAX_VERTEX_NUM];   //访问标志数组
+void(*VisitFunc_Arr)(MGraph* G, int v);    //函数变量用于数组存储的图或网
+void(*VisitFunc_List)(ALGraph* G, int v);  //函数变量用于邻接表存储的图或网
+void Input(InfoType **ch);
+int LocateVex_Arr(MGraph *G, char* v);
+void AssignArcCell(ArcCell* a1, ArcCell *a2);
+void CreatG_Arr(MGraph *G);
+void CreatN_Arr(MGraph *G);
+void print_G(MGraph *G);
+void print_N(MGraph *G);
+void CreatG_List(ALGraph *G);
+void CreatN_List(ALGraph *G);
+int LocateVex_List(ALGraph *G, VertexType* v);
+int QueueEmpty(SqQueue *Q);
+int FirstAdjVex_Arr(MGraph *G, int v);
+int FirstAdjVex_List(ALGraph *G, int v);
+int NextAdjVex_Arr(MGraph* G, int v, int w);
+void DFS_Arr(MGraph *G, int v);
+int FirstAdjVex_List(ALGraph *G, int v);
+void DFS_List(ALGraph *G, int v);
+int NextAdjVex_List(ALGraph* G, int v, int w);
+
+void InitQueue(SqQueue *Q)
+{
+	(*Q).base = (QElemType*)malloc(MAXQSIZE*sizeof(QElemType));
+	if (!(*Q).base)
+	{
+		printf("队列分配内存失败！\n");
+		exit(-1);
+	}
+	(*Q).front = (*Q).real = 0;
+}
+
+void EnQueue(SqQueue* Q, QElemType e)
+{
+	if (((*Q).real + 1) % MAXQSIZE == (*Q).front)
+	{
+		printf("队列满！\n");
+		exit(-1);
+	}
+
+	(*Q).base[(*Q).real] = e;
+	(*Q).real = ((*Q).real + 1) % MAXQSIZE;
+}
+
+void DeQueue(SqQueue* Q, QElemType* e)
+{
+	if (QueueEmpty(Q))
+	{
+		printf("队列空！\n");
+		exit(-1);
+	}
+
+	(*e) = (*Q).base[(*Q).front];
+	(*Q).front = ((*Q).front + 1) % MAXQSIZE;
+}
+
+int QueueEmpty(SqQueue *Q)
+{
+	if ((*Q).front == (*Q).real)
+		return OK;
+	return ERROR;
+}
+
+void Creat_Arr(MGraph *G)    //创建用数组存储的图或网
+{
+	int KindType;
+	int flag = 1;
+	printf("选择要构造的图类，有向图(1)，有向网(2)，无向图(3)，无向网(4):\n");
+	while (flag)
+	{
+		scanf("%d", &KindType);
+		switch (KindType)
+		{
+		case 1:(*G).kind = DG; flag = 0; break;
+		case 2:(*G).kind = DN; flag = 0; break;
+		case 3:(*G).kind = UDG; flag = 0; break;
+		case 4:(*G).kind = UDN; flag = 0; break;
+		default: printf("操作错误!\n"); getchar(); break;
+		}
+	}
+	switch ((*G).kind){
+	case DG:
+	case UDG:return CreatG_Arr(G);
+	case DN:
+	case UDN:return CreatN_Arr(G);
+	default:printf("操作错误！\n"); return;
+	}
+}
+
+void Creat_List(ALGraph *G)  //创建邻接表存储的图或网
+{
+	int KindType;
+	int flag = 1;
+	printf("选择要构造的图类，有向图(1)，有向网(2)，无向图(3)，无向网(4):\n");
+	while (flag)
+	{
+		scanf("%d", &KindType);
+		switch (KindType)
+		{
+		case 1:(*G).kind = DG; flag = 0; break;
+		case 2:(*G).kind = DN; flag = 0; break;
+		case 3:(*G).kind = UDG; flag = 0; break;
+		case 4:(*G).kind = UDN; flag = 0; break;
+		default: printf("操作错误!\n"); getchar(); break;
+		}
+	}
+	switch ((*G).kind){
+	case DG:
+	case UDG:return CreatG_List(G);
+	case DN:
+	case UDN:return CreatN_List(G);
+	default:printf("操作错误！\n"); return;
+	}
+}
+
+void CreatG_Arr(MGraph *G)        //创建用数组存储的图
+{
+	int  i, j, k, m;
+	VertexType v1[20], v2[20];
+	printf("输入图的顶点数和弧数：\n");
+	scanf("%d%d", &(*G).vexnum, &(*G).arcnum);
+	printf("输入%d个顶点向量：\n", (*G).vexnum);
+	for (i = 0; i < (*G).vexnum; ++i) scanf("%s", (*G).vexs[i]);
+	for (i = 0; i < (*G).vexnum; i++)
+	{
+		for (j = 0; j < (*G).vexnum; j++)
+		{
+			(*G).arcs[i][j].adj = 0;
+			(*G).arcs[i][j].info = NULL;
+		}
+
+	}
+	printf("依次输入%d条边依附的顶点：\n", (*G).arcnum);
+	for (k = 0; k < (*G).arcnum; k++)
+	{
+		scanf("%s%s", v1, v2);
+		m = LocateVex_Arr(G, v1);
+		if (m != -1)
+			i = m;
+		else
+		{
+			printf("该顶点未找到！\n");
+			exit(-1);
+		}
+
+		m = LocateVex_Arr(G, v2);
+		if (m != -1)
+			j = m;
+		else
+		{
+			printf("该顶点未找到！\n");
+			exit(-1);
+		}
+		switch ((*G).kind)
+		{
+		case DG:(*G).arcs[i][j].adj = 1; break;
+		case UDG:(*G).arcs[i][j].adj = 1;
+			(*G).arcs[j][i].adj = 1;
+			break;
+		default:("图的类型匹配错误！\n"); break;
+		}
+
+	}
+}
+
+void CreatN_Arr(MGraph *G)     //创建用数组存储的网
+{
+	int IncInfo, i, j, k, w, m;
+	VertexType v1[20], v2[20];
+	printf("各弧是否含有其他信息？Yes(1),No(0):\n");
+	scanf("%d", &IncInfo);
+	printf("输入图的顶点数和弧数：\n");
+	scanf("%d%d", &(*G).vexnum, &(*G).arcnum);
+	printf("输入%d个顶点向量：\n", (*G).vexnum);
+	for (i = 0; i < (*G).vexnum; ++i) scanf("%s", (*G).vexs[i]);
+	for (i = 0; i < (*G).vexnum; i++)
+	{
+		for (j = 0; j < (*G).vexnum; j++)
+		{
+			(*G).arcs[i][j].adj = INFINITY;
+			(*G).arcs[i][j].info = NULL;
+		}
+
+	}
+
+
+	for (k = 0; k < (*G).arcnum; k++)
+	{
+		printf("输入1条边依附的顶点及权值：\n");
+		scanf("%s%s%d", v1, v2, &w);
+		m = LocateVex_Arr(G, v1);
+		if (m != -1)
+			i = m;
+		else
+		{
+			printf("该顶点未找到！\n");
+			exit(-1);
+		}
+
+		m = LocateVex_Arr(G, v2);
+		if (m != -1)
+			j = m;
+		else
+		{
+			printf("该顶点未找到！\n");
+			exit(-1);
+		}
+		(*G).arcs[i][j].adj = w;
+		if (IncInfo)
+		{
+			printf("输入该弧相关信息:\n");
+			Input(&(*G).arcs[i][j].info);
+		}
+		if ((*G).kind == UDN)
+			AssignArcCell(&(*G).arcs[j][i], &(*G).arcs[i][j]);
+	}
+}
+
+void CreatG_List(ALGraph *G)   //创建邻接表存储的图
+{
+	int  i, j, k, m;
+	ArcNode *arcnode;
+	VertexType v1[20], v2[20];
+	printf("输入图的顶点数和弧数：\n");
+	scanf("%d%d", &(*G).vexnum, &(*G).arcnum);
+	printf("输入%d个顶点向量：\n", (*G).vexnum);
+	for (i = 0; i < (*G).vexnum; ++i) scanf("%s", (*G).vertices[i].data);
+	for (i = 0; i < (*G).vexnum; i++)
+		(*G).vertices[i].firstarc = NULL;
+	printf("依次输入%d条边依附的顶点：\n", (*G).arcnum);
+	for (k = 0; k < (*G).arcnum; k++)
+	{
+		scanf("%s%s", v1, v2);
+		m = LocateVex_List(G, v1);
+		if (m != -1)
+			i = m;
+		else
+		{
+			printf("该顶点未找到！\n");
+			exit(-1);
+		}
+
+		m = LocateVex_List(G, v2);
+		if (m != -1)
+			j = m;
+		else
+		{
+			printf("该顶点未找到！\n");
+			exit(-1);
+		}
+
+		arcnode = (ArcNode*)malloc(sizeof(ArcNode));
+		arcnode->adjvex = j;
+		arcnode->adj = 1;
+		arcnode->info = NULL;
+		arcnode->nextarc = (*G).vertices[i].firstarc;
+		(*G).vertices[i].firstarc = arcnode;
+		if ((*G).kind == UDG)
+		{
+			arcnode = (ArcNode*)malloc(sizeof(ArcNode));
+			arcnode->adjvex = i;
+			arcnode->adj = 1;
+			arcnode->info = NULL;
+			arcnode->nextarc = (*G).vertices[j].firstarc;
+			(*G).vertices[j].firstarc = arcnode;
+		}
+	}
+}
+
+void CreatN_List(ALGraph *G)       //创建邻接表存储的网
+{
+	int IncInfo, i, j, k, w, m;
+	ArcNode *arcnode1, *arcnode2;
+	VertexType v1[20], v2[20];
+	printf("各弧是否含有其他信息？Yes(1),No(0):\n");
+	scanf("%d", &IncInfo);
+	printf("输入图的顶点数和弧数：\n");
+	scanf("%d%d", &(*G).vexnum, &(*G).arcnum);
+	printf("输入%d个顶点向量：\n", (*G).vexnum);
+	for (i = 0; i < (*G).vexnum; ++i) scanf("%s", (*G).vertices[i].data);
+	for (i = 0; i < (*G).vexnum; i++)
+		(*G).vertices[i].firstarc = NULL;
+
+	for (k = 0; k < (*G).arcnum; k++)
+	{
+		printf("输入1条边依附的顶点及权值：\n");
+		scanf("%s%s%d", v1, v2, &w);
+		m = LocateVex_List(G, v1);
+		if (m != -1)
+			i = m;
+		else
+		{
+			printf("该顶点未找到！\n");
+			exit(-1);
+		}
+
+		m = LocateVex_List(G, v2);
+		if (m != -1)
+			j = m;
+		else
+		{
+			printf("该顶点未找到！\n");
+			exit(-1);
+		}
+		arcnode1 = (ArcNode*)malloc(sizeof(ArcNode));
+		arcnode1->adjvex = j;
+		arcnode1->adj = w;
+		if (IncInfo)
+		{
+			printf("输入该弧相关信息:\n");
+			Input(&(arcnode1->info));
+		}
+		else
+			arcnode1->info = NULL;
+		arcnode1->nextarc = (*G).vertices[i].firstarc;
+		(*G).vertices[i].firstarc = arcnode1;
+		if ((*G).kind == UDN)
+		{
+			arcnode2 = (ArcNode*)malloc(sizeof(ArcNode));
+			arcnode2->adjvex = i;
+			arcnode2->adj = w;
+			if (arcnode1->info)
+			{
+				arcnode2->info = (InfoType*)malloc(20 * sizeof(InfoType));
+				strcpy(arcnode2->info, arcnode1->info);
+			}
+			else
+				arcnode2->info = NULL;
+			arcnode2->nextarc = (*G).vertices[j].firstarc;
+			(*G).vertices[j].firstarc = arcnode2;
+		}
+	}
+}
+
+int LocateVex_Arr(MGraph *G, char* v)    //查找指定顶点向量在顶点向量数组中的位置
+{
+	int i;
+	for (i = 0; i < (*G).vexnum; i++)
+	{
+		if (strcmp((*G).vexs[i], v) == 0)
+			break;
+	}
+
+	if (i < (*G).vexnum)
+		return i;
+	else
+		return ERROR;
+}
+
+int LocateVex_List(ALGraph *G, VertexType* v)  //查找指定顶点向量在顶点向量数组中的位置
+{
+	int i;
+	for (i = 0; i < (*G).vexnum; i++)
+	{
+		if (strcmp((*G).vertices[i].data, v) == 0)
+			break;
+	}
+
+	if (i < (*G).vexnum)
+		return i;
+	else
+		return ERROR;
+}
+
+void AssignArcCell(ArcCell* a1, ArcCell *a2)    //弧的复制
+{
+	(*a1).adj = (*a2).adj;
+	if ((*a2).info)
+	{
+		(*a1).info = (InfoType*)malloc(20 * sizeof(InfoType));
+		if (!(*a1).info)
+			exit(-1);
+		strcpy((*a1).info, (*a2).info);
+	}
+}
+
+void Input(InfoType **ch)
+{
+	(*ch) = (InfoType*)malloc(20 * sizeof(InfoType));
+	if (!(*ch))
+		exit(-1);
+	scanf("%s", (*ch));
+}
+
+void List_to_Arr(MGraph *G1, ALGraph *G2)  //根据邻接表存储的图或网创建数组存储的对应的图或网
+{
+	int i, j;
+	ArcNode* p;
+	InfoType* q;
+	(*G1).kind = (*G2).kind;
+	(*G1).arcnum = (*G2).arcnum;
+	(*G1).vexnum = (*G2).vexnum;
+	for (i = 0; i < (*G1).vexnum; i++)
+	{
+		strcpy((*G1).vexs[i], (*G2).vertices[i].data);
+	}
+	if ((*G1).kind == DG || (*G1).kind == UDG)
+	{
+		for (i = 0; i < (*G1).vexnum; i++)
+		for (j = 0; j < (*G1).vexnum; j++){
+			(*G1).arcs[i][j].adj = 0;
+			(*G1).arcs[i][j].info = NULL;
+		}
+	}
+	else
+	{
+		for (i = 0; i < (*G1).vexnum; i++)
+		for (j = 0; j < (*G1).vexnum; j++){
+			(*G1).arcs[i][j].adj = INFINITY;
+			(*G1).arcs[i][j].info = NULL;
+		}
+	}
+
+	for (i = 0; i < (*G1).vexnum; i++)
+	for (p = (*G2).vertices[i].firstarc; p != NULL; p = p->nextarc)
+	{
+		(*G1).arcs[i][p->adjvex].adj = p->adj;
+		if (p->info)
+		{
+			q = (InfoType*)malloc(20 * sizeof(InfoType));
+			strcpy(q, p->info);
+			(*G1).arcs[i][p->adjvex].info = q;
+		}
+	}
+}
+
+void Arr_to_List(ALGraph *G1, MGraph *G2)  //根据数组存储的对应的图或网创建邻接表存储的图或网
+{
+	int i, j;
+	ArcNode* p;
+	(*G1).kind = (*G2).kind;
+	(*G1).arcnum = (*G2).arcnum;
+	(*G1).vexnum = (*G2).vexnum;
+	for (i = 0; i < (*G1).vexnum; i++)
+	{
+		strcpy((*G1).vertices[i].data, (*G2).vexs[i]);
+		(*G1).vertices[i].firstarc = NULL;
+	}
+
+	for (i = 0; i < (*G1).vexnum; i++)
+	{
+		for (j = 0; j < (*G1).vexnum; j++)
+		{
+			switch ((*G1).kind)
+			{
+			case DG:
+			case UDG:
+				if ((*G2).arcs[i][j].adj == 1)
+				{
+					p = (ArcNode*)malloc(sizeof(ArcNode));
+					p->adj = 1;
+					p->adjvex = j;
+					p->info = NULL;
+					p->nextarc = (*G1).vertices[i].firstarc;
+					(*G1).vertices[i].firstarc = p;
+				}break;
+			case DN:
+			case UDN:
+				if ((*G2).arcs[i][j].adj != INFINITY)
+				{
+					p = (ArcNode*)malloc(sizeof(ArcNode));
+					p->adj = (*G2).arcs[i][j].adj;
+					p->adjvex = j;
+					if ((*G2).arcs[i][j].info)
+					{
+						p->info = (InfoType*)malloc(20 * sizeof(InfoType));
+						strcpy(p->info, (*G2).arcs[i][j].info);
+					}
+					else
+						p->info = NULL;
+					p->nextarc = (*G1).vertices[i].firstarc;
+					(*G1).vertices[i].firstarc = p;
+				}break;
+			default:printf("图的类型不匹配！\n"); break;
+			}
+		}
+	}
+}
+
+void print_Arr(MGraph *G)      //输出用数组存储的图或网
+{
+	printf("按数组存储法：\n");
+	printf("类别：");
+	switch ((*G).kind)
+	{
+	case DG:printf("有向图\n"); break;
+	case DN:printf("有向网\n"); break;
+	case UDG:printf("无向图\n"); break;
+	case UDN:printf("无向网\n"); break;
+	default:printf("图的类型不匹配！\n"); exit(-1);
+	}
+	printf("顶点数：%d\t弧数：%d\n", (*G).vexnum, (*G).arcnum);
+	switch ((*G).kind)
+	{
+	case DG:
+	case UDG:print_G(G); break;
+	case DN:
+	case UDN:print_N(G); break;
+	default: printf("图的种类不匹配！\n"); break;
+	}
+}
+
+void print_G(MGraph *G)             //输出用数组存储的图
+{
+	int i, j;
+	for (i = 0; i < (*G).vexnum; i++)
+	{
+		for (j = 0; j < (*G).vexnum; j++)
+		{
+			if ((*G).arcs[i][j].adj == 1)
+			{
+				if ((*G).kind == UDG)
+					printf("%s--------%s\n", (*G).vexs[i], (*G).vexs[j]);
+				else
+					printf("%s------->%s\n", (*G).vexs[i], (*G).vexs[j]);
+			}
+
+		}
+	}
+}
+
+void print_N(MGraph *G)           //输出用数组存储的网
+{
+	int i, j;
+	for (i = 0; i < (*G).vexnum; i++)
+	{
+		for (j = 0; j < (*G).vexnum; j++)
+		{
+			if ((*G).arcs[i][j].adj != INFINITY)
+			{
+				if ((*G).kind == UDN)
+				{
+					printf("%s--------%s\t", (*G).vexs[i], (*G).vexs[j]);
+					if ((*G).arcs[i][j].info)
+						printf("%s\t%d\n", (*G).arcs[i][j].info, (*G).arcs[i][j].adj);
+					else
+						printf("%d\n", (*G).arcs[i][j].adj);
+				}
+				else
+				{
+					printf("%s------->%s\t", (*G).vexs[i], (*G).vexs[j]);
+					if ((*G).arcs[i][j].info)
+						printf("%s\t%d\n", (*G).arcs[i][j].info, (*G).arcs[i][j].adj);
+					else
+						printf("%d\n", (*G).arcs[i][j].adj);
+				}
+
+			}
+
+		}
+	}
+}
+
+void print_Vexs(MGraph *G)      //输出用数组存储的图或网的邻接矩阵
+{
+	int i, j;
+	printf("图的邻接矩阵：\n");
+	switch ((*G).kind)
+	{
+	case DG:
+	case UDG:
+		for (i = 0; i < (*G).vexnum; i++)
+		{
+			for (j = 0; j < (*G).vexnum; j++)
+				printf("%d   ", (*G).arcs[i][j].adj);
+			printf("\n");
+		}break;
+	case DN:
+	case UDN:
+		printf("其中#代表无穷大\n");
+		for (i = 0; i < (*G).vexnum; i++)
+		{
+			for (j = 0; j < (*G).vexnum; j++)
+			{
+				if ((*G).arcs[i][j].adj == INFINITY)
+					printf("#   ");
+				else
+					printf("%d    ", (*G).arcs[i][j].adj);
+			}
+			printf("\n");
+		}break;
+	default:printf("图的类型不匹配！\n"); break;
+	}
+}
+
+void print_List(ALGraph *G)      //输出用邻接表存储的图或网
+{
+	int i;
+	ArcNode* p;
+	printf("按邻接表存储法：\n");
+	printf("类别：");
+	switch ((*G).kind)
+	{
+	case DG:printf("有向图\n"); break;
+	case DN:printf("有向网\n"); break;
+	case UDG:printf("无向图\n"); break;
+	case UDN:printf("无向网\n"); break;
+	default:printf("图的类型不匹配！\n"); exit(-1);
+	}
+
+	printf("顶点数：%d\t弧数：%d\n", (*G).vexnum, (*G).arcnum);
+
+	for (i = 0; i<(*G).vexnum; i++)
+	{
+		for (p = (*G).vertices[i].firstarc; p != NULL; p = p->nextarc)
+		{
+
+			switch ((*G).kind)
+			{
+			case DG:printf("%s------>%s\n", (*G).vertices[i].data, (*G).vertices[p->adjvex].data); break;
+			case UDG:printf("%s-------%s\n", (*G).vertices[i].data, (*G).vertices[p->adjvex].data); break;
+			case DN:printf("%s------>%s\t", (*G).vertices[i].data, (*G).vertices[p->adjvex].data);
+				if (p->info)
+					printf("%s\t", p->info);
+				printf("%d\n", p->adj); break;
+			case UDN:printf("%s-------%s\t", (*G).vertices[i].data, (*G).vertices[p->adjvex].data);
+				if (p->info)
+					printf("%s\t", p->info);
+				printf("%d\n", p->adj); break;
+			}
+		}
+	}
+}
+void Destory_Arr(MGraph *G)  //清除用数组存储的图或网中开辟的内存
+{
+	int i, j, flag = 0;
+	if (!G)
+	{
+		printf("要清除的图或网为空！\n");
+		return;
+	}
+
+	for (i = 0; i < (*G).vexnum; i++)
+	{
+		for (j = 0; j < (*G).vexnum; j++)
+		{
+			if ((*G).arcs[i][j].info)
+			{
+				free((*G).arcs[i][j].info);
+				flag = 1;
+			}
+
+		}
+	}
+	if (flag)
+		printf("内存已清除！\n");
+	else
+		printf("弧上无信息！\n");
+}
+
+void Destroy_List(ALGraph *G)   //清除用邻接表存储的图或网内存
+{
+	int i;
+	ArcNode* p;
+	if (!G)
+	{
+		printf("要清除的图或网为空！\n");
+		return;
+	}
+	for (i = 0; i < (*G).vexnum; i++)
+	{
+		p = (*G).vertices[i].firstarc;
+		while (p != NULL)
+		{
+			(*G).vertices[i].firstarc = p->nextarc;
+			if (p->info)
+				free(p->info);
+			free(p);
+			p = (*G).vertices[i].firstarc;
+		}
+	}
+	printf("内存已清除！\n");
+}
+
+void printTraverse_Arr(MGraph* G, int v) //按广度和深度优先遍历输出图或网的顶点
+{
+	printf("%s\t", (*G).vexs[v]);
+}
+
+void printTraverse_List(ALGraph* G, int v) //按广度和深度优先遍历输出图或网的顶点
+{
+	printf("%s\t", (*G).vertices[v].data);
+}
+
+void BFSTraverse_Arr(MGraph* G, void(*Visit)(MGraph* G, int v)) //数组存储的图或网广度优先遍历
+{
+	int v, w, u;
+	SqQueue Q;
+	VisitFunc_Arr = Visit;
+	for (v = 0; v < (*G).vexnum; v++)  visited[v] = false;
+	InitQueue(&Q);
+	for (v = 0; v < (*G).vexnum;v++)
+	if (!visited[v])
+	{
+		visited[v] = ture;
+		VisitFunc_Arr(G, v);
+		EnQueue(&Q, v);
+		while (!QueueEmpty(&Q))
+		{
+			DeQueue(&Q, &u);
+			for (w = FirstAdjVex_Arr(G, u); w >= 0; w = NextAdjVex_Arr(G, u, w))
+			{
+				if (!visited[w]){
+					visited[w] = ture;
+					VisitFunc_Arr(G, w);
+					EnQueue(&Q, w);
+				}
+			}
+		}
+	}
+}
+
+void BFSTraverse_List(ALGraph* G, void(*Visit)(ALGraph* G, int v))//邻接表存储的图或网广度优先遍历
+{
+	int v, w, u;
+	SqQueue Q;
+	VisitFunc_List = Visit;
+	for (v = 0; v < (*G).vexnum; v++)  visited[v] = false;
+	InitQueue(&Q);
+	for (v = 0; v < (*G).vexnum; v++)
+	if (!visited[v])
+	{
+		visited[v] = ture;
+		VisitFunc_List(G, v);
+		EnQueue(&Q, v);
+		while (!QueueEmpty(&Q))
+		{
+			DeQueue(&Q, &u);
+			for (w = FirstAdjVex_List(G, u); w >= 0; w = NextAdjVex_List(G, u, w))
+			{
+				if (!visited[w]){
+					visited[w] = ture;
+					VisitFunc_List(G, w);
+					EnQueue(&Q, w);
+				}
+			}
+		}
+	}
+}
+
+void DFSTraverst_Arr(MGraph *G, void(*Visit)(MGraph *G, int v)) //深度优先遍历数组存储的图或网
+{
+	VisitFunc_Arr = Visit;
+	int v;
+	for (v = 0; v < (*G).vexnum; v++) visited[v] = false;
+	for (v = 0; v < (*G).vexnum;v++)
+	if (!visited[v])  DFS_Arr(G, v);
+}
+
+void DFS_Arr(MGraph *G, int v) //从第v个顶点出发递归深度优先遍历图或网
+{
+	int w;
+	visited[v] = ture;
+	VisitFunc_Arr(G,v);
+	for (w = FirstAdjVex_Arr(G, v); w >= 0;w=NextAdjVex_Arr(G,v,w))
+	if (!visited[w])  DFS_Arr(G,w);
+}
+
+int FirstAdjVex_Arr(MGraph *G, int v)  //查找用数组存储的图或网从第v个顶点开始下一个遍历的顶点
+{
+	int i;
+	if (!G)
+		return ERROR;
+	switch ((*G).kind)
+	{
+	case DG:
+	case UDG:
+		for (i = 0; i < (*G).vexnum; i++)
+		{
+			if ((*G).arcs[v][i].adj == 1 && visited[i] == false)
+				return i;
+		}
+		return ERROR;
+	case DN:
+	case UDN:
+		for (i = 0; i < (*G).vexnum; i++)
+		{
+			if ((*G).arcs[v][i].adj != INFINITY && visited[i] == false)
+				return i;
+		}
+		return ERROR;
+			
+	}
+}
+
+int NextAdjVex_Arr(MGraph* G, int v, int w) //查找用数组存储的图或网从第v个顶点开始第w个后遍历的顶点
+{
+	int i;
+	if (!G)
+		return ERROR;
+	switch ((*G).kind)
+	{
+	case DG:
+	case UDG:
+		for (i = w; i < (*G).vexnum; i++)
+		{
+			if ((*G).arcs[v][i].adj == 1 && visited[i] == false)
+				return i;
+		}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+		return ERROR;
+	case DN:
+	case UDN:
+		for (i = w; i < (*G).vexnum; i++)
+		{
+			if ((*G).arcs[v][i].adj != INFINITY && visited[i] == false)
+				return i;
+		}
+		return ERROR;
+	}
+}
+
+void DFSTraverst_List(ALGraph *G, void(*Visit)(ALGraph *G, int v))//深度优先遍历邻接表存储的图或网
+{
+	VisitFunc_List = Visit;
+	int v;
+	for (v = 0; v < (*G).vexnum; v++) visited[v] = false;
+	for (v = 0; v < (*G).vexnum; v++)
+	if (!visited[v])  DFS_List(G, v);
+}
+void DFS_List(ALGraph *G, int v)//从第v个顶点出发递归深度优先遍历图或网
+{
+	int w;
+	visited[v] = ture;
+	VisitFunc_List(G, v);
+	for (w = FirstAdjVex_List(G, v); w >= 0; w = NextAdjVex_List(G, v, w))
+	if (!visited[w])  DFS_List(G, w);
+}
+
+int FirstAdjVex_List(ALGraph *G, int v)//查找用邻接表存储的图或网从第v个顶点开始下一个遍历的顶点
+{
+	ArcNode* p;
+	if (!G)
+		return ERROR;
+	switch ((*G).kind)
+	{
+	case DG:
+	case UDG:
+		for (p=(*G).vertices[v].firstarc; p!=NULL; p=p->nextarc)
+		{
+			if (p->adj==1 && visited[p->adjvex] == false)
+				return p->adjvex;
+		}
+		return ERROR;
+	case DN:
+	case UDN:
+		for (p = (*G).vertices[v].firstarc; p != NULL; p = p->nextarc)
+		{
+			if (p->adj !=INFINITY && visited[p->adjvex] == false)
+				return p->adjvex;
+		}
+		return ERROR;
+	}
+}
+
+int NextAdjVex_List(ALGraph* G, int v, int w)//查找用邻接表 存储的图或网从第v个顶点开始第w个后遍历的顶点
+{
+	ArcNode* p,*q;
+	if (!G)
+		return ERROR;
+	switch ((*G).kind)
+	{
+	case DG:
+	case UDG:
+		for (q = (*G).vertices[v].firstarc; q != NULL; q = q->nextarc)
+			if (q->adjvex == w)
+				break;
+		for (p = q; p != NULL; p = p->nextarc)
+		{
+			if (p->adj == 1 && visited[p->adjvex] == false)
+				return p->adjvex;
+		}
+		return ERROR;
+	case DN:
+	case UDN:
+		for (q = (*G).vertices[v].firstarc; q != NULL; q = q->nextarc)
+		   if (q->adjvex == w)
+			   break;
+		for (p = q; p != NULL; p = p->nextarc)
+		{
+			if (p->adj != INFINITY && visited[p->adjvex] == false)
+				return p->adjvex;
+		}
+		return ERROR;
+	}
+}
+
+
+void main()
+{
+	ALGraph g1;
+	MGraph g2;
+	Creat_List(&g1);
+	print_List(&g1);
+	printf("\n邻接表存储的深度优先遍历：\n");
+	DFSTraverst_List(&g1, printTraverse_List);
+	printf("\n邻接表存储的广度优先遍历：\n");
+	BFSTraverse_List(&g1, printTraverse_List);
+	printf("\n邻接表存储转换为数组存储：\n");
+	List_to_Arr(&g2, &g1);
+	print_Arr(&g2);
+	print_Vexs(&g2);
+	printf("\n数组存储的深度优先遍历：\n");
+	DFSTraverst_Arr(&g2, printTraverse_Arr);
+	printf("\n数组存储的广度优先遍历：\n");
+	BFSTraverse_Arr(&g2, printTraverse_Arr);
+	Destory_Arr(&g2);
+	Destroy_List(&g1);
+	printf("--------------------------------\n");
+	Creat_Arr(&g2);
+	print_Arr(&g2);
+	print_Vexs(&g2);
+	printf("\n数组存储的深度优先遍历：\n");
+	DFSTraverst_Arr(&g2, printTraverse_Arr);
+	printf("\n数组存储的广度优先遍历：\n");
+	BFSTraverse_Arr(&g2, printTraverse_Arr);
+	printf("\n数组存储转换为邻接表存储：\n");
+	Arr_to_List(&g1, &g2);
+	print_List(&g1);
+	printf("\n邻接表存储的深度优先遍历：\n");
+	DFSTraverst_List(&g1, printTraverse_List);
+	printf("\n邻接表存储的广度优先遍历：\n");
+	BFSTraverse_List(&g1, printTraverse_List);
+	Destory_Arr(&g2);
+	Destroy_List(&g1);
+	Destroy_List(&g1);
+}
